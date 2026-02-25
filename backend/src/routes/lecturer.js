@@ -1,6 +1,8 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { authenticateToken, authorizeRoles } = require("../middleware/auth");
+const { decryptBuffer } = require("../utils/crypto");
+const { matchTemplates } = require("../utils/biometric");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -146,6 +148,111 @@ router.get(
 
       res.json({ course, sessions });
     } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Scan fingerprint for a session and mark attendance (placeholder matching)
+router.post(
+  "/sessions/:sessionId/scan",
+  authenticateToken,
+  authorizeRoles("LECTURER"),
+  async (req, res, next) => {
+    try {
+      const sessionId = parseInt(req.params.sessionId, 10);
+      const { template } = req.body;
+
+      if (!template) {
+        return res.status(400).json({ error: "template is required" });
+      }
+
+      const candidateBuffer =
+        typeof template === "string"
+          ? Buffer.from(template, "base64")
+          : Buffer.from(template);
+
+      const session = await prisma.attendanceSession.findFirst({
+        where: {
+          id: sessionId,
+          course: {
+            lecturer_id: req.user.lecturerId,
+          },
+        },
+        include: {
+          course: true,
+        },
+      });
+
+      if (!session) {
+        return res.status(404).json({ error: "Session not found or you are not the owner" });
+      }
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: { course_id: session.course_id },
+        include: {
+          student: true,
+        },
+      });
+
+      let matchedStudent = null;
+
+      for (const enrollment of enrollments) {
+        const storedEncrypted = enrollment.student.biometric_template;
+        if (!storedEncrypted) continue;
+
+        let storedTemplate;
+        try {
+          storedTemplate = decryptBuffer(storedEncrypted);
+        } catch (e) {
+          // Skip any student with invalid or corrupted biometric data
+          continue;
+        }
+
+        if (matchTemplates(storedTemplate, candidateBuffer)) {
+          matchedStudent = enrollment.student;
+          break;
+        }
+      }
+
+      if (!matchedStudent) {
+        return res.status(404).json({ error: "No matching fingerprint found for this session" });
+      }
+
+      // Create or return existing attendance record
+      let record = await prisma.attendanceRecord.findUnique({
+        where: {
+          session_id_student_id: {
+            session_id: session.id,
+            student_id: matchedStudent.id,
+          },
+        },
+      });
+
+      if (!record) {
+        record = await prisma.attendanceRecord.create({
+          data: {
+            session_id: session.id,
+            student_id: matchedStudent.id,
+            status: "PRESENT",
+          },
+        });
+      }
+
+      res.status(200).json({
+        message: "Fingerprint matched and attendance recorded (placeholder logic)",
+        student: {
+          id: matchedStudent.id,
+          matric_number: matchedStudent.matric_number,
+          full_name: matchedStudent.full_name,
+          email: matchedStudent.email,
+        },
+        record,
+      });
+    } catch (err) {
+      if (err.message && err.message.includes("BIOMETRIC_SECRET")) {
+        return res.status(500).json({ error: err.message });
+      }
       next(err);
     }
   }
