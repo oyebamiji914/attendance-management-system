@@ -5,10 +5,89 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+model Student {
+  id                 Int               @id @default(autoincrement())
+  matric_number      String            @unique
+  full_name          String
+  email              String            @unique
+  password_hash      String
+  biometric_template Bytes?
+
+  enrollments        Enrollment[]
+  attendanceRecords  AttendanceRecord[]
+}
+
+model Lecturer {
+  id            Int       @id @default(autoincrement())
+  staff_id      String    @unique
+  full_name     String
+  email         String    @unique
+  password_hash String
+
+  courses       Course[]
+}
+
+model Course {
+  id           Int                 @id @default(autoincrement())
+  course_code  String              @unique
+  course_title String
+  lecturer_id  Int
+
+  lecturer     Lecturer            @relation(fields: [lecturer_id], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[]
+  sessions     AttendanceSession[]
+
+  @@index([lecturer_id])
+}
+
+model Enrollment {
+  id         Int     @id @default(autoincrement())
+  student_id Int
+  course_id  Int
+
+  student    Student @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  course     Course  @relation(fields: [course_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, course_id])
+  @@index([course_id])
+}
+
+model AttendanceSession {
+  id         Int               @id @default(autoincrement())
+  course_id  Int
+  start_time DateTime
+  end_time   DateTime?
+
+  course     Course            @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  records    AttendanceRecord[]
+
+  @@index([course_id, start_time])
+}
+
+model AttendanceRecord {
+  id         Int               @id @default(autoincrement())
+  session_id Int
+  student_id Int
+  timestamp  DateTime          @default(now())
+  status     AttendanceStatus
+
+  session    AttendanceSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  student    Student           @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@unique([session_id, student_id])
+  @@index([student_id, timestamp])
 }
