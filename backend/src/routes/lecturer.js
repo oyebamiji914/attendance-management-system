@@ -37,6 +37,30 @@ router.post(
   }
 );
 
+// List lecturer's courses and their sessions
+router.get(
+  "/courses",
+  authenticateToken,
+  authorizeRoles("LECTURER"),
+  async (req, res, next) => {
+    try {
+      const courses = await prisma.course.findMany({
+        where: { lecturer_id: req.user.lecturerId },
+        include: {
+          sessions: {
+            orderBy: { start_time: "desc" },
+          },
+        },
+        orderBy: { course_code: "asc" },
+      });
+
+      res.json({ courses });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // Start an attendance session
 router.post(
   "/courses/:courseId/sessions/start",
