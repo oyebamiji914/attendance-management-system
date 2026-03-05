@@ -29,6 +29,36 @@ router.get(
   }
 );
 
+// Get student's enrolled courses
+router.get(
+  "/courses",
+  authenticateToken,
+  authorizeRoles("STUDENT"),
+  async (req, res, next) => {
+    try {
+      const enrollments = await prisma.enrollment.findMany({
+        where: { student_id: req.user.studentId },
+        include: {
+          course: {
+            include: {
+              lecturer: {
+                select: {
+                  full_name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { id: "desc" },
+      });
+      res.json({ courses: enrollments.map((e) => e.course) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // Get student's attendance history
 router.get(
   "/attendance",
