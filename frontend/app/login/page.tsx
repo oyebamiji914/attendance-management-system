@@ -1,136 +1,132 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { loginStudent, loginLecturer, type Role } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+
+import { loginLecturer, loginStudent, type Role } from "@/lib/api/auth";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>("student");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const form = useForm<{ role: Role; email: string; password: string }>({
+    defaultValues: { role: "student", email: "", password: "" },
+  });
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res =
-        role === "student"
-          ? await loginStudent(email, password)
-          : await loginLecturer(email, password);
+  const loginMutation = useMutation({
+    mutationFn: async (values: { role: Role; email: string; password: string }) => {
+      return values.role === "student"
+        ? loginStudent(values.email, values.password)
+        : loginLecturer(values.email, values.password);
+    },
+    onSuccess: (res, values) => {
       if (res.token) {
         localStorage.setItem("token", res.token);
-        localStorage.setItem("role", role);
-        window.location.href = role === "student" ? "/dashboard" : "/lecturer/dashboard";
+        localStorage.setItem("role", values.role);
+        window.location.href = values.role === "student" ? "/dashboard" : "/lecturer/dashboard";
       }
-    } catch (err: unknown) {
-      const msg = err && typeof err === "object" && "response" in err
-        ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-        : "Login failed";
-      setError(msg || "Invalid credentials");
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+  });
+
+  const errorMessage =
+    (loginMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+    (loginMutation.error ? "Login failed" : "");
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 py-8 dark:bg-slate-900 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 dark:bg-slate-900">
       <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
-              Sign in
-            </h1>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Biometric Attendance System
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription>Biometric Attendance System</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {errorMessage ? (
+              <Alert variant="destructive">
+                <AlertTitle>Sign in failed</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit((values) => loginMutation.mutate(values))}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="role"
+                  rules={{ required: "Role is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="student">Student</SelectItem>
+                          <SelectItem value="lecturer">Lecturer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  rules={{ required: "Email is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" autoComplete="email" placeholder="you@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  rules={{ required: "Password is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" autoComplete="current-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+                  {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+            </Form>
+
+            <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="font-medium text-[hsl(var(--primary))] hover:underline">
+                Sign up
+              </Link>
             </p>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Role tabs */}
-          <div className="mb-6 flex rounded-xl bg-slate-100 p-1 dark:bg-slate-700">
-            <button
-              type="button"
-              onClick={() => setRole("student")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors ${
-                role === "student"
-                  ? "bg-white text-slate-900 shadow dark:bg-slate-600 dark:text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              }`}
-            >
-              Student
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("lecturer")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors ${
-                role === "lecturer"
-                  ? "bg-white text-slate-900 shadow dark:bg-slate-600 dark:text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              }`}
-            >
-              Lecturer
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-500 sm:text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-500 sm:text-sm"
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-slate-800"
-            >
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-            >
-              Sign up
-            </Link>
-          </p>
-        </div>
         <p className="mt-4 text-center">
-          <Link
-            href="/"
-            className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-          >
+          <Link href="/" className="text-sm text-[hsl(var(--muted-foreground))] hover:underline">
             ← Back to home
           </Link>
         </p>

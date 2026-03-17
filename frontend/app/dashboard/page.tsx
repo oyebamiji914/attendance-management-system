@@ -1,50 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  getStudentProfile,
-  getStudentCourses,
-  getStudentAttendance,
-  type Course,
-  type AttendanceRecord,
-} from "@/lib/api";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import { getStudentAttendance, getStudentCourses, getStudentProfile } from "@/lib/api/student";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function StudentDashboardPage() {
-  const [profile, setProfile] = useState<{ matric_number: string; full_name: string; email: string } | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const token = useMemo(() => (typeof window !== "undefined" ? localStorage.getItem("token") : null), []);
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
+    if (!token) window.location.href = "/login";
+  }, [token]);
 
-    async function fetchData() {
-      try {
-        const [profileRes, coursesRes, attendanceRes] = await Promise.all([
-          getStudentProfile(),
-          getStudentCourses(),
-          getStudentAttendance(),
-        ]);
-        setProfile(profileRes.student);
-        setCourses(coursesRes.courses || []);
-        setAttendance(attendanceRes.records || []);
-      } catch (err) {
-        setError("Failed to load dashboard data. Please sign in again.");
-        setTimeout(() => {
-          window.location.href = "/login";
-        }, 2000);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+  const profileQuery = useQuery({
+    queryKey: ["student", "profile"],
+    queryFn: getStudentProfile,
+    enabled: !!token,
+  });
+
+  const coursesQuery = useQuery({
+    queryKey: ["student", "courses"],
+    queryFn: getStudentCourses,
+    enabled: !!token,
+  });
+
+  const attendanceQuery = useQuery({
+    queryKey: ["student", "attendance"],
+    queryFn: getStudentAttendance,
+    enabled: !!token,
+  });
 
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -53,10 +43,17 @@ export default function StudentDashboardPage() {
     });
   }
 
-  if (loading) {
+  const isLoading = profileQuery.isLoading || coursesQuery.isLoading || attendanceQuery.isLoading;
+  const error =
+    (profileQuery.error as any)?.response?.data?.error ||
+    (coursesQuery.error as any)?.response?.data?.error ||
+    (attendanceQuery.error as any)?.response?.data?.error ||
+    (profileQuery.error || coursesQuery.error || attendanceQuery.error ? "Failed to load dashboard data." : "");
+
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <div className="text-slate-600 dark:text-slate-400">Loading...</div>
+        <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
       </div>
     );
   }
@@ -64,18 +61,34 @@ export default function StudentDashboardPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <p className="text-red-600 dark:text-red-400">{error}</p>
+        <div className="w-full max-w-lg px-4">
+          <Alert variant="destructive">
+            <AlertTitle>Unable to load dashboard</AlertTitle>
+            <AlertDescription>
+              {String(error)}{" "}
+              <Button
+                variant="outline"
+                className="mt-3"
+                onClick={() => (window.location.href = "/login")}
+              >
+                Sign in again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
       </div>
     );
   }
+
+  const profile = profileQuery.data?.student ?? null;
+  const courses = coursesQuery.data?.courses ?? [];
+  const attendance = attendanceQuery.data?.records ?? [];
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
       <header className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
         <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Student Dashboard
-          </h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Student Dashboard</h1>
           <div className="flex gap-4">
             <Link
               href="/"
@@ -83,139 +96,114 @@ export default function StudentDashboardPage() {
             >
               Home
             </Link>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => {
                 localStorage.removeItem("token");
                 localStorage.removeItem("role");
                 window.location.href = "/login";
               }}
-              className="text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             >
               Sign out
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        {profile && (
-          <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">
-              Profile
-            </h2>
-            <dl className="grid gap-2 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-slate-500 dark:text-slate-400">Name</dt>
-                <dd className="font-medium text-slate-900 dark:text-white">{profile.full_name}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500 dark:text-slate-400">Matric number</dt>
-                <dd className="font-medium text-slate-900 dark:text-white">{profile.matric_number}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-slate-500 dark:text-slate-400">Email</dt>
-                <dd className="font-medium text-slate-900 dark:text-white">{profile.email}</dd>
-              </div>
-            </dl>
-          </section>
-        )}
+        {profile ? (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Profile</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-[hsl(var(--muted-foreground))]">Name</dt>
+                  <dd className="font-medium">{profile.full_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-[hsl(var(--muted-foreground))]">Matric number</dt>
+                  <dd className="font-medium">{profile.matric_number}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-[hsl(var(--muted-foreground))]">Email</dt>
+                  <dd className="font-medium">{profile.email}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        ) : null}
 
-        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-          <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">
-            Enrolled Courses
-          </h2>
-          {courses.length === 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              You are not enrolled in any courses yet.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-              {courses.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="font-medium text-slate-900 dark:text-white">
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Enrolled Courses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {courses.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">You are not enrolled in any courses yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {courses.map((c) => (
+                  <li key={c.id} className="rounded-lg border border-[hsl(var(--border))] p-4">
+                    <p className="font-medium">
                       {c.course_code} – {c.course_title}
                     </p>
-                    {c.lecturer && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Lecturer: {c.lecturer.full_name}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                      Lecturer: {c.lecturer?.full_name ?? "—"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-          <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">
-            Attendance History
-          </h2>
-          {attendance.length === 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              No attendance records yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700">
-                    <th className="pb-3 text-left font-medium text-slate-700 dark:text-slate-300">
-                      Course
-                    </th>
-                    <th className="pb-3 text-left font-medium text-slate-700 dark:text-slate-300">
-                      Session
-                    </th>
-                    <th className="pb-3 text-left font-medium text-slate-700 dark:text-slate-300">
-                      Status
-                    </th>
-                    <th className="pb-3 text-left font-medium text-slate-700 dark:text-slate-300">
-                      Date & time
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-100 dark:border-slate-700 last:border-0"
-                    >
-                      <td className="py-3 text-slate-900 dark:text-white">
-                        {r.session?.course?.course_code} – {r.session?.course?.course_title}
-                      </td>
-                      <td className="py-3 text-slate-600 dark:text-slate-400">
-                        {r.session?.start_time
-                          ? formatDate(r.session.start_time)
-                          : "—"}
-                      </td>
-                      <td className="py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                            r.status === "PRESENT"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
-                              : r.status === "LATE"
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="py-3 text-slate-600 dark:text-slate-400">
-                        {formatDate(r.timestamp)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Attendance History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {attendance.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">No attendance records yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Course</TableHead>
+                      <TableHead>Session</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date & time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {attendance.map((r) => {
+                      const variant =
+                        r.status === "PRESENT" ? "success" : r.status === "LATE" ? "warning" : "muted";
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-medium">
+                            {r.session?.course?.course_code} – {r.session?.course?.course_title}
+                          </TableCell>
+                          <TableCell className="text-[hsl(var(--muted-foreground))]">
+                            {r.session?.start_time ? formatDate(r.session.start_time) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={variant as any}>{r.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-[hsl(var(--muted-foreground))]">
+                            {formatDate(r.timestamp)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
