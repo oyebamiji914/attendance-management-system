@@ -1,18 +1,24 @@
-const express = require("express");
-const bcrypt = require("bcrypt");
-const { PrismaClient } = require("@prisma/client");
-const { signUserToken } = require("../middleware/auth");
+import express from "express";
+import bcrypt from "bcrypt";
+import prisma from "../lib/prisma";
+import { signUserToken } from "../middleware/auth.js";
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
-// Student registration
 router.post("/students/register", async (req, res, next) => {
   try {
-    const { matric_number, full_name, email, password } = req.body;
+    const { matric_number, full_name, email, password } = req.body as {
+      matric_number?: string;
+      full_name?: string;
+      email?: string;
+      password?: string;
+    };
 
     if (!matric_number || !full_name || !email || !password) {
-      return res.status(400).json({ error: "matric_number, full_name, email and password are required" });
+      res.status(400).json({
+        error: "matric_number, full_name, email and password are required",
+      });
+      return;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -42,20 +48,23 @@ router.post("/students/register", async (req, res, next) => {
         email: student.email,
       },
     });
-  } catch (err) {
-    if (err.code === "P2002") {
-      return res.status(409).json({ error: "Student with this matric number or email already exists" });
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      res.status(409).json({
+        error: "Student with this matric number or email already exists",
+      });
+      return;
     }
     next(err);
   }
 });
 
-// Student login
 router.post("/students/login", async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body as { email?: string; password?: string };
     if (!email || !password) {
-      return res.status(400).json({ error: "email and password are required" });
+      res.status(400).json({ error: "email and password are required" });
+      return;
     }
 
     const student = await prisma.student.findUnique({
@@ -63,12 +72,14 @@ router.post("/students/login", async (req, res, next) => {
     });
 
     if (!student) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const valid = await bcrypt.compare(password, student.password_hash);
     if (!valid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const token = signUserToken({
@@ -92,13 +103,20 @@ router.post("/students/login", async (req, res, next) => {
   }
 });
 
-// Lecturer registration
 router.post("/lecturers/register", async (req, res, next) => {
   try {
-    const { staff_id, full_name, email, password } = req.body;
+    const { staff_id, full_name, email, password } = req.body as {
+      staff_id?: string;
+      full_name?: string;
+      email?: string;
+      password?: string;
+    };
 
     if (!staff_id || !full_name || !email || !password) {
-      return res.status(400).json({ error: "staff_id, full_name, email and password are required" });
+      res.status(400).json({
+        error: "staff_id, full_name, email and password are required",
+      });
+      return;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -128,20 +146,23 @@ router.post("/lecturers/register", async (req, res, next) => {
         email: lecturer.email,
       },
     });
-  } catch (err) {
-    if (err.code === "P2002") {
-      return res.status(409).json({ error: "Lecturer with this staff ID or email already exists" });
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      res.status(409).json({
+        error: "Lecturer with this staff ID or email already exists",
+      });
+      return;
     }
     next(err);
   }
 });
 
-// Lecturer login
 router.post("/lecturers/login", async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body as { email?: string; password?: string };
     if (!email || !password) {
-      return res.status(400).json({ error: "email and password are required" });
+      res.status(400).json({ error: "email and password are required" });
+      return;
     }
 
     const lecturer = await prisma.lecturer.findUnique({
@@ -149,12 +170,14 @@ router.post("/lecturers/login", async (req, res, next) => {
     });
 
     if (!lecturer) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const valid = await bcrypt.compare(password, lecturer.password_hash);
     if (!valid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const token = signUserToken({
@@ -178,5 +201,4 @@ router.post("/lecturers/login", async (req, res, next) => {
   }
 });
 
-module.exports = router;
-
+export default router;

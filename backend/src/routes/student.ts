@@ -1,12 +1,10 @@
-const express = require("express");
-const { PrismaClient } = require("@prisma/client");
-const { authenticateToken, authorizeRoles } = require("../middleware/auth");
-const { encryptBuffer } = require("../utils/crypto");
+import express from "express";
+import prisma from "../lib/prisma";
+import { authenticateToken, authorizeRoles } from "../middleware/auth";
+import { encryptBuffer } from "../utils/crypto";
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
-// Get current student's profile
 router.get(
   "/me",
   authenticateToken,
@@ -14,7 +12,7 @@ router.get(
   async (req, res, next) => {
     try {
       const student = await prisma.student.findUnique({
-        where: { id: req.user.studentId },
+        where: { id: req.user!.studentId! },
         select: {
           id: true,
           matric_number: true,
@@ -29,7 +27,6 @@ router.get(
   }
 );
 
-// Get student's enrolled courses
 router.get(
   "/courses",
   authenticateToken,
@@ -37,7 +34,7 @@ router.get(
   async (req, res, next) => {
     try {
       const enrollments = await prisma.enrollment.findMany({
-        where: { student_id: req.user.studentId },
+        where: { student_id: req.user!.studentId! },
         include: {
           course: {
             include: {
@@ -59,7 +56,6 @@ router.get(
   }
 );
 
-// Get student's attendance history
 router.get(
   "/attendance",
   authenticateToken,
@@ -67,7 +63,7 @@ router.get(
   async (req, res, next) => {
     try {
       const records = await prisma.attendanceRecord.findMany({
-        where: { student_id: req.user.studentId },
+        where: { student_id: req.user!.studentId! },
         include: {
           session: {
             include: {
@@ -77,7 +73,6 @@ router.get(
         },
         orderBy: { timestamp: "desc" },
       });
-
       res.json({ records });
     } catch (err) {
       next(err);
@@ -85,29 +80,28 @@ router.get(
   }
 );
 
-// Register or update student's biometric (fingerprint) template
 router.post(
   "/biometric",
   authenticateToken,
   authorizeRoles("STUDENT"),
   async (req, res, next) => {
     try {
-      const { template } = req.body;
+      const { template } = req.body as { template?: string | Buffer };
 
       if (!template) {
-        return res.status(400).json({ error: "template is required" });
+        res.status(400).json({ error: "template is required" });
+        return;
       }
 
-      // Expect template as base64 or raw string; convert to Buffer
       const rawBuffer =
         typeof template === "string"
           ? Buffer.from(template, "base64")
-          : Buffer.from(template);
+          : Buffer.from(template as ArrayBuffer);
 
       const encrypted = encryptBuffer(rawBuffer);
 
       const updated = await prisma.student.update({
-        where: { id: req.user.studentId },
+        where: { id: req.user!.studentId! },
         data: {
           biometric_template: encrypted,
         },
@@ -123,15 +117,21 @@ router.post(
         message: "Biometric template stored securely",
         student: updated,
       });
-    } catch (err) {
-      // Surface config errors clearly
-      if (err.message && err.message.includes("BIOMETRIC_SECRET")) {
-        return res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as Error).message === "string" &&
+        (err as Error).message.includes("BIOMETRIC_SECRET")
+      ) {
+        res.status(500).json({ error: (err as Error).message });
+        return;
       }
       next(err);
     }
   }
 );
 
-module.exports = router;
-
+export default router;

@@ -1,43 +1,49 @@
-const express = require("express");
-const { PrismaClient } = require("@prisma/client");
-const { authenticateToken, authorizeRoles } = require("../middleware/auth");
-const { decryptBuffer } = require("../utils/crypto");
-const { matchTemplates } = require("../utils/biometric");
+import express from "express";
+import prisma from "../lib/prisma";
+import { authenticateToken, authorizeRoles } from "../middleware/auth";
+import { decryptBuffer } from "../utils/crypto";
+import { matchTemplates } from "../utils/biometric";
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
-// Create a course (lecturer only)
 router.post(
   "/courses",
   authenticateToken,
   authorizeRoles("LECTURER"),
   async (req, res, next) => {
     try {
-      const { course_code, course_title } = req.body;
+      const { course_code, course_title } = req.body as {
+        course_code?: string;
+        course_title?: string;
+      };
       if (!course_code || !course_title) {
-        return res.status(400).json({ error: "course_code and course_title are required" });
+        res.status(400).json({
+          error: "course_code and course_title are required",
+        });
+        return;
       }
 
       const course = await prisma.course.create({
         data: {
           course_code,
           course_title,
-          lecturer_id: req.user.lecturerId,
+          lecturer_id: req.user!.lecturerId!,
         },
       });
 
       res.status(201).json({ course });
-    } catch (err) {
-      if (err.code === "P2002") {
-        return res.status(409).json({ error: "Course with this course_code already exists" });
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+        res.status(409).json({
+          error: "Course with this course_code already exists",
+        });
+        return;
       }
       next(err);
     }
   }
 );
 
-// List lecturer's courses and their sessions
 router.get(
   "/courses",
   authenticateToken,
@@ -45,7 +51,7 @@ router.get(
   async (req, res, next) => {
     try {
       const courses = await prisma.course.findMany({
-        where: { lecturer_id: req.user.lecturerId },
+        where: { lecturer_id: req.user!.lecturerId! },
         include: {
           sessions: {
             orderBy: { start_time: "desc" },
@@ -53,7 +59,6 @@ router.get(
         },
         orderBy: { course_code: "asc" },
       });
-
       res.json({ courses });
     } catch (err) {
       next(err);
@@ -61,25 +66,26 @@ router.get(
   }
 );
 
-// Start an attendance session
 router.post(
   "/courses/:courseId/sessions/start",
   authenticateToken,
   authorizeRoles("LECTURER"),
   async (req, res, next) => {
     try {
-      const courseId = parseInt(req.params.courseId, 10);
-      const { end_time } = req.body; // optional end time
+      const courseId = parseInt(req.params.courseId as string, 10);
+      const { end_time } = req.body as { end_time?: string };
 
-      // Ensure course belongs to lecturer
       const course = await prisma.course.findFirst({
         where: {
           id: courseId,
-          lecturer_id: req.user.lecturerId,
+          lecturer_id: req.user!.lecturerId!,
         },
       });
       if (!course) {
-        return res.status(404).json({ error: "Course not found or you are not the owner" });
+        res.status(404).json({
+          error: "Course not found or you are not the owner",
+        });
+        return;
       }
 
       const session = await prisma.attendanceSession.create({
@@ -97,27 +103,28 @@ router.post(
   }
 );
 
-// Stop an attendance session by setting end_time to now
 router.post(
   "/sessions/:sessionId/stop",
   authenticateToken,
   authorizeRoles("LECTURER"),
   async (req, res, next) => {
     try {
-      const sessionId = parseInt(req.params.sessionId, 10);
+      const sessionId = parseInt(req.params.sessionId as string, 10);
 
-      // Ensure session belongs to a course taught by this lecturer
       const session = await prisma.attendanceSession.findFirst({
         where: {
           id: sessionId,
           course: {
-            lecturer_id: req.user.lecturerId,
+            lecturer_id: req.user!.lecturerId!,
           },
         },
       });
 
       if (!session) {
-        return res.status(404).json({ error: "Session not found or you are not the owner" });
+        res.status(404).json({
+          error: "Session not found or you are not the owner",
+        });
+        return;
       }
 
       const updated = await prisma.attendanceSession.update({
@@ -132,24 +139,25 @@ router.post(
   }
 );
 
-// View attendance report for a course
 router.get(
   "/courses/:courseId/attendance",
   authenticateToken,
   authorizeRoles("LECTURER"),
   async (req, res, next) => {
     try {
-      const courseId = parseInt(req.params.courseId, 10);
+      const courseId = parseInt(req.params.courseId as string, 10);
 
-      // Ensure course belongs to lecturer
       const course = await prisma.course.findFirst({
         where: {
           id: courseId,
-          lecturer_id: req.user.lecturerId,
+          lecturer_id: req.user!.lecturerId!,
         },
       });
       if (!course) {
-        return res.status(404).json({ error: "Course not found or you are not the owner" });
+        res.status(404).json({
+          error: "Course not found or you are not the owner",
+        });
+        return;
       }
 
       const sessions = await prisma.attendanceSession.findMany({
@@ -177,30 +185,30 @@ router.get(
   }
 );
 
-// Scan fingerprint for a session and mark attendance (placeholder matching)
 router.post(
   "/sessions/:sessionId/scan",
   authenticateToken,
   authorizeRoles("LECTURER"),
   async (req, res, next) => {
     try {
-      const sessionId = parseInt(req.params.sessionId, 10);
-      const { template } = req.body;
+      const sessionId = parseInt(req.params.sessionId as string, 10);
+      const { template } = req.body as { template?: string | Buffer };
 
       if (!template) {
-        return res.status(400).json({ error: "template is required" });
+        res.status(400).json({ error: "template is required" });
+        return;
       }
 
       const candidateBuffer =
         typeof template === "string"
           ? Buffer.from(template, "base64")
-          : Buffer.from(template);
+          : Buffer.from(template as ArrayBuffer);
 
       const session = await prisma.attendanceSession.findFirst({
         where: {
           id: sessionId,
           course: {
-            lecturer_id: req.user.lecturerId,
+            lecturer_id: req.user!.lecturerId!,
           },
         },
         include: {
@@ -209,7 +217,10 @@ router.post(
       });
 
       if (!session) {
-        return res.status(404).json({ error: "Session not found or you are not the owner" });
+        res.status(404).json({
+          error: "Session not found or you are not the owner",
+        });
+        return;
       }
 
       const enrollments = await prisma.enrollment.findMany({
@@ -219,17 +230,16 @@ router.post(
         },
       });
 
-      let matchedStudent = null;
+      let matchedStudent: { id: number; matric_number: string; full_name: string; email: string } | null = null;
 
       for (const enrollment of enrollments) {
         const storedEncrypted = enrollment.student.biometric_template;
         if (!storedEncrypted) continue;
 
-        let storedTemplate;
+        let storedTemplate: Buffer;
         try {
           storedTemplate = decryptBuffer(storedEncrypted);
-        } catch (e) {
-          // Skip any student with invalid or corrupted biometric data
+        } catch {
           continue;
         }
 
@@ -240,10 +250,12 @@ router.post(
       }
 
       if (!matchedStudent) {
-        return res.status(404).json({ error: "No matching fingerprint found for this session" });
+        res.status(404).json({
+          error: "No matching fingerprint found for this session",
+        });
+        return;
       }
 
-      // Create or return existing attendance record
       let record = await prisma.attendanceRecord.findUnique({
         where: {
           session_id_student_id: {
@@ -273,14 +285,21 @@ router.post(
         },
         record,
       });
-    } catch (err) {
-      if (err.message && err.message.includes("BIOMETRIC_SECRET")) {
-        return res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as Error).message === "string" &&
+        (err as Error).message.includes("BIOMETRIC_SECRET")
+      ) {
+        res.status(500).json({ error: (err as Error).message });
+        return;
       }
       next(err);
     }
   }
 );
 
-module.exports = router;
-
+export default router;
