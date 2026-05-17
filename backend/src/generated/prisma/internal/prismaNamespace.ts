@@ -80,12 +80,12 @@ export type PrismaVersion = {
 }
 
 /**
- * Prisma Client JS version: 7.5.0
- * Query Engine version: 280c870be64f457428992c43c1f6d557fab6e29e
+ * Prisma Client JS version: 7.8.0
+ * Query Engine version: 3c6e192761c0362d496ed980de936e2f3cebcd3a
  */
 export const prismaVersion: PrismaVersion = {
-  client: "7.5.0",
-  engine: "280c870be64f457428992c43c1f6d557fab6e29e"
+  client: "7.8.0",
+  engine: "3c6e192761c0362d496ed980de936e2f3cebcd3a"
 }
 
 /**
@@ -388,6 +388,7 @@ export const ModelName = {
   Lecturer: 'Lecturer',
   Course: 'Course',
   Enrollment: 'Enrollment',
+  SessionSchedule: 'SessionSchedule',
   AttendanceSession: 'AttendanceSession',
   AttendanceRecord: 'AttendanceRecord'
 } as const
@@ -405,7 +406,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "student" | "lecturer" | "course" | "enrollment" | "attendanceSession" | "attendanceRecord"
+    modelProps: "student" | "lecturer" | "course" | "enrollment" | "sessionSchedule" | "attendanceSession" | "attendanceRecord"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -705,6 +706,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    SessionSchedule: {
+      payload: Prisma.$SessionSchedulePayload<ExtArgs>
+      fields: Prisma.SessionScheduleFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SessionScheduleFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SessionScheduleFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        findFirst: {
+          args: Prisma.SessionScheduleFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SessionScheduleFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        findMany: {
+          args: Prisma.SessionScheduleFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>[]
+        }
+        create: {
+          args: Prisma.SessionScheduleCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        createMany: {
+          args: Prisma.SessionScheduleCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SessionScheduleCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>[]
+        }
+        delete: {
+          args: Prisma.SessionScheduleDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        update: {
+          args: Prisma.SessionScheduleUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        deleteMany: {
+          args: Prisma.SessionScheduleDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SessionScheduleUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SessionScheduleUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>[]
+        }
+        upsert: {
+          args: Prisma.SessionScheduleUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SessionSchedulePayload>
+        }
+        aggregate: {
+          args: Prisma.SessionScheduleAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSessionSchedule>
+        }
+        groupBy: {
+          args: Prisma.SessionScheduleGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SessionScheduleGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SessionScheduleCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SessionScheduleCountAggregateOutputType> | number
+        }
+      }
+    }
     AttendanceSession: {
       payload: Prisma.$AttendanceSessionPayload<ExtArgs>
       fields: Prisma.AttendanceSessionFieldRefs
@@ -934,11 +1009,30 @@ export const EnrollmentScalarFieldEnum = {
 export type EnrollmentScalarFieldEnum = (typeof EnrollmentScalarFieldEnum)[keyof typeof EnrollmentScalarFieldEnum]
 
 
+export const SessionScheduleScalarFieldEnum = {
+  id: 'id',
+  course_id: 'course_id',
+  start_date: 'start_date',
+  end_date: 'end_date',
+  daily_start_time: 'daily_start_time',
+  daily_end_time: 'daily_end_time',
+  days_of_week: 'days_of_week',
+  is_enabled: 'is_enabled',
+  created_at: 'created_at'
+} as const
+
+export type SessionScheduleScalarFieldEnum = (typeof SessionScheduleScalarFieldEnum)[keyof typeof SessionScheduleScalarFieldEnum]
+
+
 export const AttendanceSessionScalarFieldEnum = {
   id: 'id',
   course_id: 'course_id',
   start_time: 'start_time',
-  end_time: 'end_time'
+  end_time: 'end_time',
+  schedule_id: 'schedule_id',
+  scheduled_date: 'scheduled_date',
+  manually_started: 'manually_started',
+  manually_ended: 'manually_ended'
 } as const
 
 export type AttendanceSessionScalarFieldEnum = (typeof AttendanceSessionScalarFieldEnum)[keyof typeof AttendanceSessionScalarFieldEnum]
@@ -1038,6 +1132,13 @@ export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -1161,12 +1262,28 @@ export type PrismaClientOptions = ({
    * ```
    */
   comments?: runtime.SqlCommenterPlugin[]
+  /**
+   * Optional maximum size for the query plan cache. If not provided, a default size will be used.
+   * A value of `0` can be used to disable the cache entirely. A higher cache size can improve
+   * performance for applications that execute a large number of unique queries, while a smaller
+   * cache size can reduce memory usage.
+   * 
+   * @example
+   * ```
+   * const prisma = new PrismaClient({
+   *   adapter,
+   *   queryPlanCacheMaxSize: 100,
+   * })
+   * ```
+   */
+  queryPlanCacheMaxSize?: number
 }
 export type GlobalOmitConfig = {
   student?: Prisma.StudentOmit
   lecturer?: Prisma.LecturerOmit
   course?: Prisma.CourseOmit
   enrollment?: Prisma.EnrollmentOmit
+  sessionSchedule?: Prisma.SessionScheduleOmit
   attendanceSession?: Prisma.AttendanceSessionOmit
   attendanceRecord?: Prisma.AttendanceRecordOmit
 }

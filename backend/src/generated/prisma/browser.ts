@@ -38,6 +38,11 @@ export type Course = Prisma.CourseModel
  */
 export type Enrollment = Prisma.EnrollmentModel
 /**
+ * Model SessionSchedule
+ * Recurring rule: open/close attendance sessions on selected weekdays between dates.
+ */
+export type SessionSchedule = Prisma.SessionScheduleModel
+/**
  * Model AttendanceSession
  * 
  */

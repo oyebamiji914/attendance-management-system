@@ -192,7 +192,7 @@ export type LecturerGroupByOutputType = {
   _max: LecturerMaxAggregateOutputType | null
 }
 
-type GetLecturerGroupByPayload<T extends LecturerGroupByArgs> = Prisma.PrismaPromise<
+export type GetLecturerGroupByPayload<T extends LecturerGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<LecturerGroupByOutputType, T['by']> &
       {

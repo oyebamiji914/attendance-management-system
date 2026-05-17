@@ -8,6 +8,8 @@ import authRoutes from "./src/routes/auth";
 import studentRoutes from "./src/routes/student";
 import lecturerRoutes from "./src/routes/lecturer";
 import enrollmentRoutes from "./src/routes/enrollment";
+import coursesRoutes from "./src/routes/courses";
+import { startSessionCron } from "./src/jobs/sessionCron";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -35,6 +37,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/lecturers", lecturerRoutes);
 app.use("/api", enrollmentRoutes);
+app.use("/api", coursesRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);
@@ -47,4 +50,5 @@ app.use((err: Error, _req: express.Request, res: express.Response, next: express
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  startSessionCron();
 });

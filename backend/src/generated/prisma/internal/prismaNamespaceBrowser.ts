@@ -55,6 +55,7 @@ export const ModelName = {
   Lecturer: 'Lecturer',
   Course: 'Course',
   Enrollment: 'Enrollment',
+  SessionSchedule: 'SessionSchedule',
   AttendanceSession: 'AttendanceSession',
   AttendanceRecord: 'AttendanceRecord'
 } as const
@@ -117,11 +118,30 @@ export const EnrollmentScalarFieldEnum = {
 export type EnrollmentScalarFieldEnum = (typeof EnrollmentScalarFieldEnum)[keyof typeof EnrollmentScalarFieldEnum]
 
 
+export const SessionScheduleScalarFieldEnum = {
+  id: 'id',
+  course_id: 'course_id',
+  start_date: 'start_date',
+  end_date: 'end_date',
+  daily_start_time: 'daily_start_time',
+  daily_end_time: 'daily_end_time',
+  days_of_week: 'days_of_week',
+  is_enabled: 'is_enabled',
+  created_at: 'created_at'
+} as const
+
+export type SessionScheduleScalarFieldEnum = (typeof SessionScheduleScalarFieldEnum)[keyof typeof SessionScheduleScalarFieldEnum]
+
+
 export const AttendanceSessionScalarFieldEnum = {
   id: 'id',
   course_id: 'course_id',
   start_time: 'start_time',
-  end_time: 'end_time'
+  end_time: 'end_time',
+  schedule_id: 'schedule_id',
+  scheduled_date: 'scheduled_date',
+  manually_started: 'manually_started',
+  manually_ended: 'manually_ended'
 } as const
 
 export type AttendanceSessionScalarFieldEnum = (typeof AttendanceSessionScalarFieldEnum)[keyof typeof AttendanceSessionScalarFieldEnum]
