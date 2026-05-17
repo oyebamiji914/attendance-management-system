@@ -60,7 +60,7 @@ export default function RegisterPage() {
       if (res.token) {
         localStorage.setItem("token", res.token);
         localStorage.setItem("role", values.role);
-        window.location.href = values.role === "student" ? "/dashboard" : "/lecturer/dashboard";
+        window.location.href = values.role === "student" ? "/student/dashboard" : "/lecturer/dashboard";
       }
     },
   });

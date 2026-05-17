@@ -1,174 +1,232 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  BookOpen,
+  Users,
+  ClipboardList,
+  Radio,
+  CheckCircle2,
+  Fingerprint,
+} from "lucide-react";
 
-import { getLecturerCourses, startAttendanceSession, stopAttendanceSession } from "@/lib/api/lecturer";
+import { getLecturerCourses, getLecturerStats, scanFingerprint } from "@/lib/api/lecturer";
+import { captureFingerprint } from "@/lib/biometric-scanner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const statCards = [
+  { key: "totalCourses", label: "Courses", icon: BookOpen },
+  { key: "totalStudents", label: "Students", icon: Users },
+  { key: "totalSessions", label: "Sessions", icon: ClipboardList },
+  { key: "activeSessions", label: "Active Sessions", icon: Radio },
+  { key: "attendanceMarked", label: "Attendance Marked", icon: CheckCircle2 },
+  { key: "studentsWithBiometric", label: "Biometric Registered", icon: Fingerprint },
+] as const;
 
 export default function LecturerDashboardPage() {
   const qc = useQueryClient();
+  const [scanStatus, setScanStatus] = useState("");
+  const [scanningSessionId, setScanningSessionId] = useState<number | null>(null);
 
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const role = typeof window !== "undefined" ? localStorage.getItem("role") : null;
-    if (!token || role !== "lecturer") window.location.href = "/login";
-  }, []);
+  const statsQuery = useQuery({
+    queryKey: ["lecturer", "stats"],
+    queryFn: getLecturerStats,
+  });
 
   const coursesQuery = useQuery({
     queryKey: ["lecturer", "courses"],
     queryFn: getLecturerCourses,
-    enabled: typeof window !== "undefined" && !!localStorage.getItem("token"),
   });
 
-  const startMutation = useMutation({
-    mutationFn: (courseId: number) => startAttendanceSession(courseId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["lecturer", "courses"] }),
+  const scanMutation = useMutation({
+    mutationFn: ({ sessionId, template }: { sessionId: number; template: string }) =>
+      scanFingerprint(sessionId, template),
+    onSuccess: (data) => {
+      setScanStatus(`✓ ${data.student?.full_name} marked present`);
+      qc.invalidateQueries({ queryKey: ["lecturer", "stats"] });
+      qc.invalidateQueries({ queryKey: ["lecturer", "attendance"] });
+      setTimeout(() => setScanStatus(""), 3000);
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      setScanStatus(`✗ ${err?.response?.data?.error || "No match found"}`);
+      setTimeout(() => setScanStatus(""), 3000);
+    },
+    onSettled: () => setScanningSessionId(null),
   });
 
-  const stopMutation = useMutation({
-    mutationFn: (sessionId: number) => stopAttendanceSession(sessionId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["lecturer", "courses"] }),
-  });
-
-  const courses = coursesQuery.data?.courses ?? [];
-
-  const getActiveSession = useMemo(
-    () =>
-      (course: { sessions: { id: number; start_time: string; end_time: string | null }[] }) =>
-        course.sessions?.find((s) => s.end_time === null) ?? null,
-    []
-  );
-
-  function formatDateTime(iso: string | null) {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  async function handleScan(sessionId: number) {
+    setScanningSessionId(sessionId);
+    setScanStatus("Place finger on scanner...");
+    try {
+      const result = await captureFingerprint();
+      setScanStatus("Matching fingerprint...");
+      await scanMutation.mutateAsync({ sessionId, template: result.template });
+    } catch {
+      setScanStatus("✗ Scanner error");
+      setScanningSessionId(null);
+      setTimeout(() => setScanStatus(""), 3000);
+    }
   }
 
-  if (coursesQuery.isLoading) {
+  const activeSessions = useMemo(() => {
+    const courses = coursesQuery.data?.courses ?? [];
+    return courses.flatMap((course) =>
+      (course.sessions ?? [])
+        .filter((s) => s.end_time === null)
+        .map((session) => ({
+          ...session,
+          course_code: course.course_code,
+          course_title: course.course_title,
+        }))
+    );
+  }, [coursesQuery.data]);
+
+  const isLoading = statsQuery.isLoading || coursesQuery.isLoading;
+  const isError = statsQuery.isError;
+
+  if (isError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
+      <div className="p-5">
+        <Alert variant="destructive">
+          <AlertTitle>Unable to load dashboard</AlertTitle>
+          <AlertDescription>
+            {(statsQuery.error as { response?: { data?: { error?: string } } })?.response?.data
+              ?.error ?? "Please sign in again."}
+            <div className="mt-3">
+              <Button variant="outline" onClick={() => (window.location.href = "/login")}>
+                Sign in
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
-  if (coursesQuery.isError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <div className="w-full max-w-lg px-4">
-          <Alert variant="destructive">
-            <AlertTitle>Unable to load courses</AlertTitle>
-            <AlertDescription>
-              {(coursesQuery.error as any)?.response?.data?.error ?? "Please sign in again."}
-              <div className="mt-3">
-                <Button variant="outline" onClick={() => (window.location.href = "/login")}>
-                  Sign in
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        </div>
-      </div>
-    );
-  }
-
-  const busy = startMutation.isPending || stopMutation.isPending;
+  const stats = statsQuery.data?.stats;
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
-      <header className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
-        <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Lecturer Dashboard</h1>
-          <div className="flex gap-4">
-            <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-              Home
-            </Link>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                localStorage.removeItem("token");
-                localStorage.removeItem("role");
-                window.location.href = "/login";
-              }}
-            >
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6 p-5">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Overview of your courses, students, and attendance
+        </p>
+      </div>
 
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Courses and Attendance Sessions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {courses.length === 0 ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">You have not created any courses yet.</p>
-            ) : (
-              <ul className="space-y-4">
-                {courses.map((course) => {
-                  const active = getActiveSession(course);
-                  return (
-                    <li key={course.id} className="rounded-lg border border-[hsl(var(--border))] p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="font-medium">
-                            {course.course_code} – {course.course_title}
-                          </p>
-                          {active ? (
-                            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-                              Active session started at {formatDateTime(active.start_time)}{" "}
-                              <Badge variant="success" className="ml-2">
-                                Active
-                              </Badge>
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">No active session</p>
-                          )}
-                        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {statCards.map(({ key, label, icon: Icon }) => (
+          <Card
+            key={key}
+            className="border-slate-200 bg-white shadow-sm"
+          >
+            <CardContent className="flex items-center gap-4 p-5">
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-11 w-11 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-900 text-white">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-600">{label}</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {stats?.[key] ?? 0}
+                    </p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-                        {active ? (
-                          <Button
-                            variant="destructive"
-                            disabled={busy}
-                            onClick={() => stopMutation.mutate(active.id)}
-                          >
-                            {stopMutation.isPending ? "Stopping..." : "Stop session"}
-                          </Button>
-                        ) : (
-                          <Button disabled={busy} onClick={() => startMutation.mutate(course.id)}>
-                            {startMutation.isPending ? "Starting..." : "Start session"}
-                          </Button>
-                        )}
-                      </div>
-
-                      {course.sessions?.length ? (
-                        <div className="mt-4 border-t border-[hsl(var(--border))] pt-4">
-                          <p className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">Recent sessions</p>
-                          <ul className="space-y-1 text-xs text-[hsl(var(--muted-foreground))]">
-                            {course.sessions.slice(0, 3).map((s) => (
-                              <li key={s.id} className="flex justify-between">
-                                <span>{formatDateTime(s.start_time)}</span>
-                                <span>{s.end_time ? `Ended ${formatDateTime(s.end_time)}` : "Active"}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+      {scanStatus && (
+        <Card className="border-slate-200 bg-gradient-to-r from-slate-50 to-slate-50">
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-slate-900">{scanStatus}</p>
           </CardContent>
         </Card>
-      </main>
+      )}
+
+      <Card className="border-slate-200 bg-white shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg font-semibold text-slate-900">
+            Active Sessions
+          </CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/lecturer/dashboard/sessions">View all sessions</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : activeSessions.length === 0 ? (
+            <p className="text-sm text-slate-600">
+              No active sessions. Start one from the{" "}
+              <Link
+                href="/lecturer/dashboard/courses"
+                className="font-medium text-slate-900 underline"
+              >
+                Courses
+              </Link>{" "}
+              page.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-200">
+              {activeSessions.map((session) => (
+                <li
+                  key={session.id}
+                  className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {session.course_code} — {session.course_title}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      Started{" "}
+                      {new Date(session.start_time).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-green-500 text-white hover:bg-green-600">Live</Badge>
+                    <Button
+                      size="sm"
+                      className="bg-slate-900 hover:bg-slate-800"
+                      disabled={scanMutation.isPending}
+                      onClick={() => handleScan(session.id)}
+                    >
+                      <Fingerprint className="mr-2 h-4 w-4" />
+                      {scanningSessionId === session.id && scanMutation.isPending
+                        ? "Scanning..."
+                        : "Scan Fingerprint"}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
