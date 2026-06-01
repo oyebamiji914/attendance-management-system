@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { X, Calendar as CalendarIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { getLecturerCourses, getLecturerSessions } from "@/lib/api/lecturer";
+import {
+  getLecturerCourses,
+  getLecturerSessions,
+  type SessionAttendanceRecord,
+} from "@/lib/api/lecturer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,10 +22,24 @@ import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function SessionsPage() {
+type LecturerSessionListItem = Awaited<
+  ReturnType<typeof getLecturerSessions>
+>["sessions"][number];
+
+type AttendanceRow = SessionAttendanceRecord & {
+  session_id: number;
+  session_start: string;
+  session_end: string | null;
+  course_code?: string;
+};
+
+function SessionsContent() {
   const searchParams = useSearchParams();
+  const courseFromQuery = searchParams.get("course") ?? "";
+  const [userCourse, setUserCourse] = useState<string | null>(null);
+  const selectedCourse = userCourse !== null ? userCourse : courseFromQuery;
+
   const [filter, setFilter] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState<string>("");
   const [page, setPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
@@ -42,24 +60,13 @@ export default function SessionsPage() {
       ),
   });
 
-  useEffect(() => {
-    const courseParam = searchParams.get("course");
-    if (courseParam) {
-      setSelectedCourse(courseParam);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [selectedCourse, dateRange]);
-
   const courses = coursesQuery.data?.courses ?? [];
   const courseIdNum = selectedCourse ? Number(selectedCourse) : null;
   const sessions = sessionsQuery.data?.sessions ?? [];
 
-  const allRecords = sessions.flatMap((session: any) =>
-    (session.records ?? []).map((r: any) => ({
-      ...r,
+  const allRecords: AttendanceRow[] = sessions.flatMap((session) =>
+    (session.records ?? []).map((record) => ({
+      ...record,
       session_id: session.id,
       session_start: session.start_time,
       session_end: session.end_time,
@@ -68,12 +75,12 @@ export default function SessionsPage() {
   );
 
   const filteredRecords = allRecords.filter(
-    (r: any) =>
-      r.student?.matric_number?.toLowerCase().includes(filter.toLowerCase()) ||
-      r.student?.full_name?.toLowerCase().includes(filter.toLowerCase())
+    (record) =>
+      record.student?.matric_number?.toLowerCase().includes(filter.toLowerCase()) ||
+      record.student?.full_name?.toLowerCase().includes(filter.toLowerCase())
   );
 
-  const filteredSessions = sessions.filter((session: any) => {
+  const filteredSessions = sessions.filter((session: LecturerSessionListItem) => {
     if (!filter) return true;
     const q = filter.toLowerCase();
     return (
@@ -88,6 +95,16 @@ export default function SessionsPage() {
 
   const selectedCourseData = courses.find((c) => c.id === courseIdNum);
   const pagination = sessionsQuery.data?.pagination;
+
+  function handleCourseChange(value: string) {
+    setUserCourse(value === "all" ? "" : value);
+    setPage(1);
+  }
+
+  function handleDateRangeChange(range: DateRange | undefined) {
+    setDateRange(range);
+    setPage(1);
+  }
 
   return (
     <div className="space-y-6 p-5">
@@ -111,7 +128,7 @@ export default function SessionsPage() {
             <div className="flex items-center gap-2">
               <Select
                 value={selectedCourse || "all"}
-                onValueChange={(v) => setSelectedCourse(v === "all" ? "" : v)}
+                onValueChange={handleCourseChange}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All courses" />
@@ -132,13 +149,13 @@ export default function SessionsPage() {
                 </SelectContent>
               </Select>
               {selectedCourse && (
-                <Button variant="ghost" size="sm" onClick={() => setSelectedCourse("")}>
+                <Button variant="ghost" size="sm" onClick={() => handleCourseChange("all")}>
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
 
-            <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+            <DatePickerWithRange date={dateRange} setDate={handleDateRangeChange} />
 
             <Input
               placeholder={
@@ -190,7 +207,7 @@ export default function SessionsPage() {
                 </div>
               )}
               <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200">
-                {filteredSessions.map((session: any) => (
+                {filteredSessions.map((session) => (
                   <li
                     key={session.id}
                     className="flex items-center justify-between gap-4 px-4 py-3"
@@ -260,7 +277,7 @@ export default function SessionsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecords.map((record: any) => (
+                  {filteredRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell className="font-medium text-slate-900">
                         {record.student?.matric_number}
@@ -324,5 +341,22 @@ export default function SessionsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function SessionsFallback() {
+  return (
+    <div className="space-y-6 p-5">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  );
+}
+
+export default function SessionsPage() {
+  return (
+    <Suspense fallback={<SessionsFallback />}>
+      <SessionsContent />
+    </Suspense>
   );
 }

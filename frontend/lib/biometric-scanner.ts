@@ -13,7 +13,7 @@ export interface BiometricTemplate {
  * Returns a mock template for development/testing.
  */
 export async function captureFingerprint(): Promise<BiometricTemplate> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     // Simulate scanner delay
     setTimeout(() => {
       // Generate mock template (random bytes for simulation)

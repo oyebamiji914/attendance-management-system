@@ -12,6 +12,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type StudentCourse = {
+  id: number;
+  code: string;
+  title: string;
+};
+
+type EnrolledStudent = {
+  id: number;
+  matric_number: string;
+  full_name: string;
+  email: string;
+  biometric_template?: string | null;
+  courses: StudentCourse[];
+};
+
 export default function StudentsPage() {
   const [filter, setFilter] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
@@ -24,21 +39,28 @@ export default function StudentsPage() {
   const courses = coursesQuery.data?.courses ?? [];
 
   const allStudents = courses.flatMap((course) =>
-    (course as any).enrollments?.map((enrollment: any) => ({
+    (course.enrollments ?? []).map((enrollment) => ({
       ...enrollment.student,
       course_code: course.course_code,
       course_title: course.course_title,
       course_id: course.id,
-    })) ?? []
+    }))
   );
 
-  const uniqueStudentsMap = new Map();
+  const uniqueStudentsMap = new Map<number, EnrolledStudent>();
   allStudents.forEach((student) => {
     const key = student.id;
     if (!uniqueStudentsMap.has(key)) {
-      uniqueStudentsMap.set(key, { ...student, courses: [] });
+      uniqueStudentsMap.set(key, {
+        id: student.id,
+        matric_number: student.matric_number,
+        full_name: student.full_name,
+        email: student.email,
+        biometric_template: student.biometric_template,
+        courses: [],
+      });
     }
-    uniqueStudentsMap.get(key).courses.push({
+    uniqueStudentsMap.get(key)!.courses.push({
       id: student.course_id,
       code: student.course_code,
       title: student.course_title,
@@ -49,7 +71,7 @@ export default function StudentsPage() {
 
   if (selectedCourse !== "all") {
     students = students.filter((s) =>
-      s.courses.some((c: any) => c.id === Number(selectedCourse))
+      s.courses.some((c) => c.id === Number(selectedCourse))
     );
   }
 
@@ -160,7 +182,7 @@ export default function StudentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {student.courses.map((course: any) => (
+                        {student.courses.map((course) => (
                           <Badge key={course.id} variant="outline" className="border-slate-300 text-slate-700">
                             {course.code}
                           </Badge>

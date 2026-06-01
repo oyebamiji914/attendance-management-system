@@ -79,12 +79,18 @@ export async function registerBiometric(template: string): Promise<{ message: st
   return data;
 }
 
-export async function getAllCourses(): Promise<{ courses: any[] }> {
-  const { data } = await api.get("/api/courses");
+export async function getAllCourses(): Promise<{ courses: Course[] }> {
+  const { data } = await api.get<{ courses: Course[] }>("/api/courses");
   return data;
 }
 
-export async function enrollInCourse(courseId: number): Promise<{ enrollment: any }> {
+export interface Enrollment {
+  id: number;
+  course_id: number;
+  student_id: number;
+}
+
+export async function enrollInCourse(courseId: number): Promise<{ enrollment: Enrollment }> {
   const { data } = await api.post(
     `/api/courses/${courseId}/enroll`,
     {},
@@ -96,7 +102,9 @@ export async function enrollInCourse(courseId: number): Promise<{ enrollment: an
 export async function updateStudentProfile(updates: {
   full_name?: string;
   email?: string;
-}): Promise<{ student: any }> {
+}): Promise<{
+  student: { id: number; matric_number: string; full_name: string; email: string };
+}> {
   const { data } = await api.put("/api/students/me", updates, { headers: authHeaders() });
   return data;
 }

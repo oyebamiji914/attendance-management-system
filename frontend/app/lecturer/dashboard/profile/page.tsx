@@ -1,38 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { User, Save } from "lucide-react";
-import { getLecturerProfile, updateLecturerProfile } from "@/lib/api/lecturer";
+import {
+  getLecturerProfile,
+  updateLecturerProfile,
+  type LecturerProfile,
+} from "@/lib/api/lecturer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function LecturerProfilePage() {
+function ProfileForm({ lecturer }: { lecturer: LecturerProfile }) {
   const qc = useQueryClient();
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-
-  const profileQuery = useQuery({
-    queryKey: ["lecturer", "profile"],
-    queryFn: getLecturerProfile,
-  });
-
-  useEffect(() => {
-    const lecturer = profileQuery.data?.lecturer;
-    if (lecturer) {
-      setFullName(lecturer.full_name);
-      setEmail(lecturer.email);
-    }
-  }, [profileQuery.data]);
+  const [fullName, setFullName] = useState(lecturer.full_name);
+  const [email, setEmail] = useState(lecturer.email);
 
   const updateMutation = useMutation({
     mutationFn: () => updateLecturerProfile({ full_name: fullName, email }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lecturer", "profile"] });
     },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="staff">Staff ID</Label>
+        <Input id="staff" value={lecturer.staff_id} disabled />
+      </div>
+      <div>
+        <Label htmlFor="name">Full Name</Label>
+        <Input
+          id="name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Enter your full name"
+        />
+      </div>
+      <div>
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email"
+        />
+      </div>
+      <Button
+        onClick={() => updateMutation.mutate()}
+        disabled={updateMutation.isPending || !fullName || !email}
+        className="w-full bg-slate-900 hover:bg-slate-800"
+      >
+        <Save className="mr-2 h-4 w-4" />
+        {updateMutation.isPending ? "Saving..." : "Save Changes"}
+      </Button>
+      {updateMutation.isSuccess && (
+        <p className="text-sm text-green-600">Profile updated successfully</p>
+      )}
+      {updateMutation.isError && (
+        <p className="text-sm text-red-600">Failed to update profile</p>
+      )}
+    </div>
+  );
+}
+
+export default function LecturerProfilePage() {
+  const profileQuery = useQuery({
+    queryKey: ["lecturer", "profile"],
+    queryFn: getLecturerProfile,
   });
 
   const lecturer = profileQuery.data?.lecturer;
@@ -59,46 +99,10 @@ export default function LecturerProfilePage() {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
+            ) : lecturer ? (
+              <ProfileForm key={lecturer.id} lecturer={lecturer} />
             ) : (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="staff">Staff ID</Label>
-                  <Input id="staff" value={lecturer?.staff_id || ""} disabled />
-                </div>
-                <div>
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Enter your full name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                  />
-                </div>
-                <Button
-                  onClick={() => updateMutation.mutate()}
-                  disabled={updateMutation.isPending || !fullName || !email}
-                  className="w-full bg-slate-900 hover:bg-slate-800"
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-                {updateMutation.isSuccess && (
-                  <p className="text-sm text-green-600">Profile updated successfully</p>
-                )}
-                {updateMutation.isError && (
-                  <p className="text-sm text-red-600">Failed to update profile</p>
-                )}
-              </div>
+              <p className="text-sm text-red-600">Failed to load profile</p>
             )}
           </CardContent>
         </Card>

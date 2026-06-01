@@ -52,13 +52,16 @@ export default function StudentCoursesPage() {
     },
   });
 
-  const enrolled = enrolledQuery.data?.courses ?? [];
-  const enrolledIds = new Set(enrolled.map((c) => c.id));
+  const enrolled = useMemo(
+    () => enrolledQuery.data?.courses ?? [],
+    [enrolledQuery.data]
+  );
 
   const available = useMemo(() => {
+    const enrolledIds = new Set(enrolled.map((c) => c.id));
     const all = allCoursesQuery.data?.courses ?? [];
-    return all.filter((c: { id: number }) => !enrolledIds.has(c.id));
-  }, [allCoursesQuery.data, enrolledIds]);
+    return all.filter((c) => !enrolledIds.has(c.id));
+  }, [allCoursesQuery.data, enrolled]);
 
   const filtered = enrolled.filter(
     (c) =>

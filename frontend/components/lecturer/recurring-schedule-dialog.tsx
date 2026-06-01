@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import {
@@ -90,11 +90,6 @@ export function RecurringScheduleDialog({
       qc.invalidateQueries({ queryKey: ["lecturer", "courses"] });
     },
   });
-
-  useEffect(() => {
-    if (!open) return;
-    schedulesQuery.refetch();
-  }, [open, courseId]);
 
   function toggleDay(day: number) {
     setDays((prev) =>

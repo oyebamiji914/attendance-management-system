@@ -36,6 +36,19 @@ export interface LecturerCourse {
   }[];
 }
 
+export interface LecturerProfile {
+  id: number;
+  staff_id: string;
+  full_name: string;
+  email: string;
+}
+
+export interface ScanFingerprintResult {
+  message: string;
+  student: SessionStudent;
+  record: SessionAttendanceRecord;
+}
+
 export interface LecturerStats {
   totalCourses: number;
   totalStudents: number;
@@ -197,7 +210,10 @@ export async function getCourseAttendance(
   limit: number = 10,
   startDate?: string,
   endDate?: string
-): Promise<any> {
+): Promise<{
+  records: SessionAttendanceRecord[];
+  pagination: { page: number; limit: number; totalPages: number; totalRecords: number };
+}> {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
@@ -205,22 +221,27 @@ export async function getCourseAttendance(
   if (startDate) params.append("startDate", startDate);
   if (endDate) params.append("endDate", endDate);
 
-  const { data } = await api.get(
+  const { data } = await api.get<{
+    records: SessionAttendanceRecord[];
+    pagination: { page: number; limit: number; totalPages: number; totalRecords: number };
+  }>(
     `/api/lecturers/courses/${courseId}/attendance?${params.toString()}`,
     { headers: authHeaders() }
   );
   return data;
 }
 
-export async function getLecturerProfile(): Promise<{ lecturer: any }> {
-  const { data } = await api.get("/api/lecturers/me", { headers: authHeaders() });
+export async function getLecturerProfile(): Promise<{ lecturer: LecturerProfile }> {
+  const { data } = await api.get<{ lecturer: LecturerProfile }>("/api/lecturers/me", {
+    headers: authHeaders(),
+  });
   return data;
 }
 
 export async function updateLecturerProfile(updates: {
   full_name?: string;
   email?: string;
-}): Promise<{ lecturer: any }> {
+}): Promise<{ lecturer: LecturerProfile }> {
   const { data } = await api.put("/api/lecturers/me", updates, { headers: authHeaders() });
   return data;
 }
@@ -271,8 +292,11 @@ export async function deleteSessionSchedule(scheduleId: number): Promise<void> {
   await api.delete(`/api/lecturers/schedules/${scheduleId}`, { headers: authHeaders() });
 }
 
-export async function scanFingerprint(sessionId: number, template: string): Promise<any> {
-  const { data } = await api.post(
+export async function scanFingerprint(
+  sessionId: number,
+  template: string
+): Promise<ScanFingerprintResult> {
+  const { data } = await api.post<ScanFingerprintResult>(
     `/api/lecturers/sessions/${sessionId}/scan`,
     { template },
     { headers: authHeaders() }
